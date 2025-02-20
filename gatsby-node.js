@@ -34,6 +34,7 @@ exports.pluginOptionsSchema = ({ Joi }) => {
 		graphql: Joi.object(),
 		concurrency: Joi.number().default(10),
 		retries: Joi.number().default(5),
+		download: Joi.boolean().default(true),
 	});
 };
 
@@ -74,38 +75,8 @@ exports.sourceNodes = async (gatsbyOptions, pluginOptions) => {
 	// Load files here rather than on file resolution.
 	// Create a node for each file and store it in the cache
 	// so it can bre retrieved on file resolution.
-	for await (const files of plugin.iterateFiles()) {
-		if (!files?.length) break;
-
-		await Promise.all(
-			files.map(async (file) => {
-				const cached = await cache.get(file.id);
-				const node = cached && getNode(cached.nodeId);
-
-				if (node) {
-					touchNode(node);
-					return;
-				}
-
-				const nameParts = file.filename_download.split('.');
-				const ext = nameParts.length > 1 ? `.${nameParts.pop()}` : '';
-				const name = nameParts.join('.');
-				const fileUrl = `${plugin.url}${plugin.url.endsWith('/') ? '' : '/'}assets/${file.id}`;
-				const fileNode = await createRemoteFileNode({
-					url: fileUrl,
-					parentNodeId: file.id,
-					store,
-					cache,
-					createNode,
-					createNodeId,
-					httpHeaders: { Authorization },
-					reporter,
-					ext,
-					name,
-				});
-				await cache.set(file.id, { nodeId: fileNode.id });
-			})
-		);
+	if (options.download) {
+		await plugin.loadFiles(gatsbyOptions);
 	}
 };
 
@@ -260,6 +231,48 @@ class Plugin {
 			typeName: this.options?.type?.system_name || 'DirectusSystemData',
 			fieldName: this.options?.type?.system_field || 'directus_system',
 		};
+	}
+
+	async loadFiles(gatsbyOptions) {
+		const {
+			actions: { createNode },
+			cache,
+			getNode
+		} = gatsbyOptions;
+
+		for await (const files of this.iterateFiles()) {
+			if (!files?.length) break;
+
+			await Promise.all(
+				files.map(async (file) => {
+					const cached = await cache.get(file.id);
+					const node = cached && getNode(cached.nodeId);
+
+					if (node) {
+						touchNode(node);
+						return;
+					}
+
+					const nameParts = file.filename_download.split('.');
+					const ext = nameParts.length > 1 ? `.${nameParts.pop()}` : '';
+					const name = nameParts.join('.');
+					const fileUrl = `${this.url}${this.url.endsWith('/') ? '' : '/'}assets/${file.id}`;
+					const fileNode = await createRemoteFileNode({
+						url: fileUrl,
+						parentNodeId: file.id,
+						store,
+						cache,
+						createNode,
+						createNodeId,
+						httpHeaders: { Authorization },
+						reporter,
+						ext,
+						name,
+					});
+					await cache.set(file.id, { nodeId: fileNode.id });
+				})
+			);
+		}
 	}
 
 	async *iterateFiles() {

@@ -50,6 +50,7 @@ module.exports = {
 					// email: "johndoe@directus.cloud",
 					// password: "mysecretpassword",
 				},
+				download: true, // Download assets into your local cache
 			},
 		},
 	],
@@ -143,6 +144,8 @@ query {
   cases.
 
 - `concurrency` [*Optional, defaults to `10`*] - tells how much images tries to download concurrently
+
+- `download` [*Optional, defaults to `true`*] - determines whether assets are downloaded and cached
 
 ## How to query
 
